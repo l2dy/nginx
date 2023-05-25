@@ -48,6 +48,7 @@ struct ngx_cycle_s {
     ngx_connection_t        **files;
     ngx_connection_t         *free_connections;
     ngx_uint_t                free_connection_n;
+    ngx_uint_t                free_http_connection_n;
 
     ngx_module_t            **modules;
     ngx_uint_t                modules_n;
@@ -68,6 +69,7 @@ struct ngx_cycle_s {
     ngx_list_t                shared_memory;
 
     ngx_uint_t                connection_n;
+    ngx_uint_t                http_connection_n;
     ngx_uint_t                files_n;
 
     ngx_connection_t         *connections;

@@ -217,6 +217,14 @@ ngx_http_init_connection(ngx_connection_t *c)
     ngx_http_in6_addr_t       *addr6;
 #endif
 
+    if (--ngx_cycle->free_http_connection_n == 0) {
+        ngx_log_error(NGX_LOG_ALERT, c->log, 0,
+                      "%ui worker_http_client_connections are not enough",
+                      ngx_cycle->http_connection_n);
+        ngx_http_close_connection(c);
+        return;
+    }
+
     hc = ngx_pcalloc(c->pool, sizeof(ngx_http_connection_t));
     if (hc == NULL) {
         ngx_http_close_connection(c);
@@ -3753,6 +3761,8 @@ ngx_http_close_connection(ngx_connection_t *c)
 #if (NGX_STAT_STUB)
     (void) ngx_atomic_fetch_add(ngx_stat_active, -1);
 #endif
+
+    ngx_cycle->free_http_connection_n++;
 
     c->destroyed = 1;
 

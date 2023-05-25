@@ -27,6 +27,8 @@ static char *ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
 static char *ngx_event_connections(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
+static char *ngx_event_http_connections(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
 static char *ngx_event_use(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_event_debug_connection(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
@@ -123,6 +125,13 @@ static ngx_command_t  ngx_event_core_commands[] = {
     { ngx_string("worker_connections"),
       NGX_EVENT_CONF|NGX_CONF_TAKE1,
       ngx_event_connections,
+      0,
+      0,
+      NULL },
+
+    { ngx_string("worker_http_client_connections"),
+      NGX_EVENT_CONF|NGX_CONF_TAKE1,
+      ngx_event_http_connections,
       0,
       0,
       NULL },
@@ -780,6 +789,8 @@ ngx_event_process_init(ngx_cycle_t *cycle)
 
     cycle->free_connections = next;
     cycle->free_connection_n = cycle->connection_n;
+    /* reserve 1 for ngx_http_close_connection() to add back */
+    cycle->free_http_connection_n = cycle->http_connection_n + 1;
 
     /* for each listening socket */
 
@@ -1062,6 +1073,32 @@ ngx_event_connections(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 
 static char *
+ngx_event_http_connections(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_event_conf_t  *ecf = conf;
+
+    ngx_str_t  *value;
+
+    if (ecf->http_connections != NGX_CONF_UNSET_UINT) {
+        return "is duplicate";
+    }
+
+    value = cf->args->elts;
+    ecf->http_connections = ngx_atoi(value[1].data, value[1].len);
+    if (ecf->http_connections == (ngx_uint_t) NGX_ERROR) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "invalid number \"%V\"", &value[1]);
+
+        return NGX_CONF_ERROR;
+    }
+
+    cf->cycle->http_connection_n = ecf->http_connections;
+
+    return NGX_CONF_OK;
+}
+
+
+static char *
 ngx_event_use(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_event_conf_t  *ecf = conf;
@@ -1239,6 +1276,7 @@ ngx_event_core_create_conf(ngx_cycle_t *cycle)
     }
 
     ecf->connections = NGX_CONF_UNSET_UINT;
+    ecf->http_connections = NGX_CONF_UNSET_UINT;
     ecf->use = NGX_CONF_UNSET_UINT;
     ecf->multi_accept = NGX_CONF_UNSET;
     ecf->accept_mutex = NGX_CONF_UNSET;
@@ -1333,6 +1371,9 @@ ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf)
 
     ngx_conf_init_uint_value(ecf->connections, DEFAULT_CONNECTIONS);
     cycle->connection_n = ecf->connections;
+
+    ngx_conf_init_uint_value(ecf->http_connections, ecf->connections);
+    cycle->http_connection_n = ecf->http_connections;
 
     ngx_conf_init_uint_value(ecf->use, module->ctx_index);
 
